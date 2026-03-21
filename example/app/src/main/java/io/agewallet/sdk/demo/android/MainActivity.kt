@@ -2,6 +2,7 @@ package io.agewallet.sdk.demo.android
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import io.agewallet.sdk.AgeWallet
 import io.agewallet.sdk.AgeWalletConfig
+import io.agewallet.sdk.AgeWalletResult
 import io.agewallet.sdk.demo.android.ui.theme.AgeWalletDemoTheme
 import kotlinx.coroutines.launch
 
@@ -73,9 +75,22 @@ class MainActivity : ComponentActivity() {
             if (uri.toString().startsWith("https://agewallet-sdk-demo.netlify.app/callback")) {
                 isLoading.value = true
                 lifecycleScope.launch {
-                    val success = ageWallet.handleCallback(intent)
-                    isVerified.value = success
+                    val result = ageWallet.handleCallback(intent)
+                    isVerified.value = result == AgeWalletResult.SUCCESS
                     isLoading.value = false
+                    when (result) {
+                        AgeWalletResult.DENIED -> Toast.makeText(
+                            this@MainActivity,
+                            "Age verification was cancelled.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        AgeWalletResult.FAILED -> Toast.makeText(
+                            this@MainActivity,
+                            "Verification could not be completed. Please try again.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        else -> Unit
+                    }
                 }
             }
         }

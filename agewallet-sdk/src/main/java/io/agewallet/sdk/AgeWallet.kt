@@ -81,14 +81,14 @@ class AgeWallet(
      * Call this from your activity's onCreate or onNewIntent.
      *
      * @param intent The intent containing the callback URL
-     * @return true if verification succeeded, false otherwise
+     * @return AgeWalletResult indicating the outcome
      */
-    suspend fun handleCallback(intent: Intent): Boolean {
-        val uri = intent.data ?: return false
+    suspend fun handleCallback(intent: Intent): AgeWalletResult {
+        val uri = intent.data ?: return AgeWalletResult.FAILED
 
         // Check if this is our callback
         if (!uri.toString().startsWith(config.redirectUri)) {
-            return false
+            return AgeWalletResult.FAILED
         }
 
         val code = uri.getQueryParameter("code")
@@ -100,14 +100,14 @@ class AgeWallet(
         if (error != null) {
             Log.e(TAG, "Authorization error: $error - $errorDescription")
             storage.clearOidcState()
-            return false
+            return if (errorDescription == "The user denied the request") AgeWalletResult.DENIED else AgeWalletResult.FAILED
         }
 
         // Validate required parameters
         if (code == null || state == null) {
             Log.e(TAG, "Missing code or state in callback")
             storage.clearOidcState()
-            return false
+            return AgeWalletResult.FAILED
         }
 
         // Validate state matches stored state
@@ -115,7 +115,7 @@ class AgeWallet(
         if (storedOidc == null || storedOidc.state != state) {
             Log.e(TAG, "Invalid state or session expired")
             storage.clearOidcState()
-            return false
+            return AgeWalletResult.FAILED
         }
 
         return try {
@@ -123,21 +123,21 @@ class AgeWallet(
             val tokenResponse = exchangeCode(code, storedOidc.verifier)
             if (tokenResponse == null) {
                 storage.clearOidcState()
-                return false
+                return AgeWalletResult.FAILED
             }
 
             // Fetch user info to verify age claim
             val userInfo = fetchUserInfo(tokenResponse.accessToken)
             if (userInfo == null) {
                 storage.clearOidcState()
-                return false
+                return AgeWalletResult.FAILED
             }
 
             // Check age_verified claim
             if (!userInfo.ageVerified) {
                 Log.e(TAG, "Age verification failed")
                 storage.clearOidcState()
-                return false
+                return AgeWalletResult.FAILED
             }
 
             // Store verification state
@@ -150,18 +150,18 @@ class AgeWallet(
             )
 
             storage.clearOidcState()
-            true
+            AgeWalletResult.SUCCESS
         } catch (e: Exception) {
             Log.e(TAG, "Error during token exchange", e)
             storage.clearOidcState()
-            false
+            AgeWalletResult.FAILED
         }
     }
 
     /**
      * Handle callback URL string directly.
      */
-    suspend fun handleCallback(url: String): Boolean {
+    suspend fun handleCallback(url: String): AgeWalletResult {
         val intent = Intent().apply {
             data = Uri.parse(url)
         }

@@ -1,6 +1,20 @@
 package io.agewallet.sdk
 
 /**
+ * Result of an age verification callback.
+ */
+enum class AgeWalletResult {
+    /** Verification completed successfully. */
+    SUCCESS,
+
+    /** User denied consent on the AgeWallet screen. */
+    DENIED,
+
+    /** Verification process failed (identity check unsuccessful). */
+    FAILED
+}
+
+/**
  * Configuration for AgeWallet SDK.
  *
  * @param clientId Your client ID from the AgeWallet dashboard
