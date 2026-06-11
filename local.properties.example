@@ -1,0 +1,9 @@
+# Copy this file to local.properties and fill in your values.
+# local.properties is gitignored.
+#
+# Get your clientId from your AgeWallet dashboard.
+
+agewallet.clientId=your-client-id
+agewallet.auth=https://app.agewallet.io/user/authorize
+agewallet.token=https://app.agewallet.io/user/token
+agewallet.userinfo=https://app.agewallet.io/user/userinfo

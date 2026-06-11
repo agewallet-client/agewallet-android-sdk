@@ -21,8 +21,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
 
-            <!-- Deep link for AgeWallet callback -->
+        <!-- Dedicated callback activity for the OIDC redirect URL. The netlify intent-filter
+             lives HERE, NOT on MainActivity, so the netlify intent doesn't bring MainActivity
+             (and the Chrome Custom Tab it hosts) to the front and kill the Custom Tab's
+             session cookie state mid-flow. Matches the Flutter demo's pattern. -->
+        <activity
+            android:name=".AgeWalletCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

@@ -43,7 +43,8 @@ internal class Storage(context: Context) {
             val state = VerificationState(
                 accessToken = obj.getString("accessToken"),
                 expiresAt = obj.getLong("expiresAt"),
-                isVerified = obj.getBoolean("isVerified")
+                isVerified = obj.getBoolean("isVerified"),
+                metadata = if (obj.has("metadata") && !obj.isNull("metadata")) obj.getString("metadata") else null
             )
 
             // Auto-clear if expired
@@ -67,6 +68,7 @@ internal class Storage(context: Context) {
             put("accessToken", state.accessToken)
             put("expiresAt", state.expiresAt)
             put("isVerified", state.isVerified)
+            if (state.metadata != null) put("metadata", state.metadata)
         }
         prefs.edit().putString(KEY_VERIFICATION, json.toString()).apply()
     }

@@ -119,6 +119,33 @@ val config = AgeWalletConfig(
 )
 ```
 
+## Metadata (optional)
+
+Attach an opaque per-verification string (max 4096 UTF-8 bytes) that round-trips through `/userinfo` and is visible to your backend and the AgeWallet dashboard. Useful for tagging build, environment, or user-flow context.
+
+```kotlin
+// Set as the instance default at construction
+val ageWallet = AgeWallet(
+    context = applicationContext,
+    config = AgeWalletConfig(
+        clientId = "your-client-id",
+        redirectUri = "https://yourapp.com/callback",
+        metadata = "checkout-flow"
+    )
+)
+
+// Update the default at runtime
+ageWallet.setMetadata("new-default")
+
+// Override for a single verification only (does not change the default)
+ageWallet.startVerification(context = this, metadata = "one-shot")
+
+// Read the metadata that round-tripped with the current verification
+val received = ageWallet.getMetadata()
+```
+
+Maximum size is `AgeWallet.METADATA_MAX_BYTES` (4096). `setMetadata` / `startVerification` throw `IllegalArgumentException` if the value exceeds the limit.
+
 ## Requirements
 
 - Android API 24+

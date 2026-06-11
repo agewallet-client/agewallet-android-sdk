@@ -20,15 +20,22 @@ enum class AgeWalletResult {
  * @param clientId Your client ID from the AgeWallet dashboard
  * @param redirectUri Your app's deep link callback URL
  * @param endpoints Optional custom endpoint configuration
+ * @param metadata Optional opaque per-verification string (max 4096 bytes) attached to every verification
  */
 data class AgeWalletConfig(
     val clientId: String,
     val redirectUri: String,
-    val endpoints: AgeWalletEndpoints = AgeWalletEndpoints()
+    val endpoints: AgeWalletEndpoints = AgeWalletEndpoints(),
+    val metadata: String? = null
 ) {
     init {
         require(clientId.isNotBlank()) { "[AgeWallet] Missing clientId" }
         require(redirectUri.isNotBlank()) { "[AgeWallet] Missing redirectUri" }
+        if (metadata != null) {
+            require(metadata.toByteArray(Charsets.UTF_8).size <= AgeWallet.METADATA_MAX_BYTES) {
+                "[AgeWallet] metadata exceeds ${AgeWallet.METADATA_MAX_BYTES}-byte limit"
+            }
+        }
     }
 }
 
@@ -47,7 +54,8 @@ data class AgeWalletEndpoints(
 internal data class VerificationState(
     val accessToken: String,
     val expiresAt: Long,
-    val isVerified: Boolean
+    val isVerified: Boolean,
+    val metadata: String? = null
 ) {
     val isExpired: Boolean
         get() = System.currentTimeMillis() >= expiresAt

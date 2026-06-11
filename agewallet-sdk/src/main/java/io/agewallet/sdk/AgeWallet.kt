@@ -37,9 +37,18 @@ class AgeWallet(
 ) {
     companion object {
         private const val TAG = "AgeWallet"
+
+        /** Maximum byte length for the metadata string (matches server-side limit). */
+        const val METADATA_MAX_BYTES = 4096
     }
 
     private val storage = Storage(context.applicationContext)
+
+    /**
+     * Runtime metadata value. Initialised from the config default; mutable via setMetadata().
+     * Used as the instance default the next time a verification flow starts (unless overridden per-call).
+     */
+    private var currentMetadata: String? = config.metadata
 
     /**
      * Check if the user is currently verified.
@@ -50,23 +59,49 @@ class AgeWallet(
     }
 
     /**
+     * Update the metadata default attached to subsequent verifications.
+     * Pass null to clear. Validates length; throws IllegalArgumentException if > 4096 bytes.
+     */
+    fun setMetadata(value: String?) {
+        validateMetadata(value)
+        currentMetadata = value
+    }
+
+    /**
+     * Return the metadata that round-tripped with the current persisted verification, or null.
+     */
+    fun getMetadata(): String? {
+        return storage.getVerification()?.metadata
+    }
+
+    /**
      * Start the verification flow.
      * Opens Chrome Custom Tabs to the AgeWallet authorization page.
      *
      * @param context Activity context for launching the browser
+     * @param metadata Optional per-call override; does NOT mutate the instance default.
      */
-    fun startVerification(context: Context) {
+    fun startVerification(context: Context, metadata: String? = null) {
+        // Per-call override wins over instance default.
+        val effectiveMetadata = metadata ?: currentMetadata
+        validateMetadata(effectiveMetadata)
+
         // Generate PKCE parameters
         val verifier = Security.generateVerifier()
         val challenge = Security.generateChallenge(verifier)
-        val state = Security.generateState()
+        // Prefix matches the netlify autoMap so the callback page can auto-fire
+        // the intent for this demo's package. Without a recognized prefix the
+        // netlify page falls through to a manual button view, requiring user
+        // interaction to complete the OIDC chain.
+        val state = "android:" + Security.generateState()
         val nonce = Security.generateNonce()
 
-        // Store OIDC state for callback validation
+        // Store OIDC state for callback validation. Metadata round-trips through the server
+        // via /userinfo, so we don't persist it locally here.
         storage.setOidcState(OidcState(state, verifier, nonce))
 
         // Build authorization URL
-        val authUrl = buildAuthUrl(challenge, state, nonce)
+        val authUrl = buildAuthUrl(challenge, state, nonce, effectiveMetadata)
 
         // Open Chrome Custom Tabs
         val customTabsIntent = CustomTabsIntent.Builder()
@@ -74,6 +109,13 @@ class AgeWallet(
             .build()
 
         customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+    }
+
+    private fun validateMetadata(value: String?) {
+        if (value == null) return
+        require(value.toByteArray(Charsets.UTF_8).size <= METADATA_MAX_BYTES) {
+            "[AgeWallet] metadata exceeds $METADATA_MAX_BYTES-byte limit"
+        }
     }
 
     /**
@@ -91,6 +133,10 @@ class AgeWallet(
             return AgeWalletResult.FAILED
         }
 
+        return processCallbackUri(uri)
+    }
+
+    private suspend fun processCallbackUri(uri: Uri): AgeWalletResult {
         val code = uri.getQueryParameter("code")
         val state = uri.getQueryParameter("state")
         val error = uri.getQueryParameter("error")
@@ -140,12 +186,13 @@ class AgeWallet(
                 return AgeWalletResult.FAILED
             }
 
-            // Store verification state
+            // Store verification state (including any metadata round-tripped via /userinfo)
             storage.setVerification(
                 VerificationState(
                     accessToken = tokenResponse.accessToken,
                     expiresAt = System.currentTimeMillis() + (tokenResponse.expiresIn * 1000),
-                    isVerified = true
+                    isVerified = true,
+                    metadata = userInfo.metadata
                 )
             )
 
@@ -176,8 +223,8 @@ class AgeWallet(
         storage.clearOidcState()
     }
 
-    private fun buildAuthUrl(challenge: String, state: String, nonce: String): String {
-        val params = mapOf(
+    private fun buildAuthUrl(challenge: String, state: String, nonce: String, metadata: String?): String {
+        val params = mutableMapOf(
             "response_type" to "code",
             "client_id" to config.clientId,
             "redirect_uri" to config.redirectUri,
@@ -187,6 +234,10 @@ class AgeWallet(
             "code_challenge_method" to "S256",
             "nonce" to nonce
         )
+
+        if (!metadata.isNullOrEmpty()) {
+            params["metadata"] = metadata
+        }
 
         val queryString = params.entries.joinToString("&") { (key, value) ->
             "${URLEncoder.encode(key, "UTF-8")}=${URLEncoder.encode(value, "UTF-8")}"
@@ -256,7 +307,8 @@ class AgeWallet(
                 val json = JSONObject(response)
 
                 UserInfo(
-                    ageVerified = json.optBoolean("age_verified", false)
+                    ageVerified = json.optBoolean("age_verified", false),
+                    metadata = if (json.has("metadata") && !json.isNull("metadata")) json.getString("metadata") else null
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "UserInfo fetch error", e)
@@ -270,6 +322,7 @@ class AgeWallet(
     )
 
     private data class UserInfo(
-        val ageVerified: Boolean
+        val ageVerified: Boolean,
+        val metadata: String?
     )
 }
