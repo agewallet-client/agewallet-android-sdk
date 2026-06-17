@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+version = "1.2.0"
+
+
 android {
     namespace = "io.agewallet.sdk"
     compileSdk = 34
